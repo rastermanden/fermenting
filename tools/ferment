@@ -139,7 +139,7 @@ def cmd_remind(args: argparse.Namespace) -> None:
         try:
             recipe = load_recipe(slug)
             steps = lib.compute_schedule(recipe["schedule"], start)
-        except (SystemExit, ValueError) as exc:
+        except (SystemExit, ValueError, KeyError) as exc:
             print(f"skipping #{issue['number']} ({slug}): {exc}", file=sys.stderr)
             continue
         due = lib.steps_due_on(steps, today)
