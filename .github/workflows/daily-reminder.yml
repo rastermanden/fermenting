@@ -49,11 +49,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           FERMENT_TZ: ${{ vars.FERMENT_TZ }}
         run: |
-          if gh issue view "${{ github.event.issue.number }}" --json labels \
+          ISSUE="${{ github.event.issue.number }}"
+          if gh issue view "$ISSUE" --json labels \
               --jq '.labels[].name' | grep -qx batch; then
-            python3 tools/ferment fill-batch "${{ github.event.issue.number }}"
+            python3 tools/ferment fill-batch "$ISSUE"
+          elif python3 tools/ferment looks-like-batch "$ISSUE"; then
+            gh issue edit "$ISSUE" --add-label batch
+            python3 tools/ferment fill-batch "$ISSUE"
           else
-            echo "not a batch issue, skipping"
+            echo "not a batch issue, skipping: body has no ferment:batch marker and is not a readable Start-a-batch form (recipe slug and start date)"
           fi
 
   remind:

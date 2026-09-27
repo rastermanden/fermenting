@@ -164,6 +164,37 @@ class ChecklistLineTests(unittest.TestCase):
         self.assertIsNone(lib.parse_checklist_date("not a checklist line"))
 
 
+class BatchIdentityTests(unittest.TestCase):
+    def test_form_body_without_label_is_batch(self):
+        body = (
+            "### Recipe slug\n\nsauerkraut\n\n"
+            "### Start date\n\ntoday\n"
+        )
+        self.assertEqual(
+            lib.parse_batch_identity(body),
+            {"slug": "sauerkraut", "start": "today"},
+        )
+
+    def test_marker_body_is_batch(self):
+        start = datetime.date(2024, 1, 10)
+        body = lib.render_batch_body(
+            "example-ferment",
+            start,
+            [lib.Step(date=start, task="Mix")],
+        )
+        self.assertEqual(
+            lib.parse_batch_identity(body),
+            {"slug": "example-ferment", "start": "2024-01-10"},
+        )
+
+    def test_foreign_body_is_not_batch(self):
+        body = (
+            "### Something else\n\nhello\n\n"
+            "This is a regular bug report, not a batch.\n"
+        )
+        self.assertIsNone(lib.parse_batch_identity(body))
+
+
 class FormBodyTests(unittest.TestCase):
     def test_parses_headings_and_values(self):
         body = (

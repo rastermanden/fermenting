@@ -7,6 +7,7 @@ Usage:
   ferment today
   ferment start <slug> [--date YYYY-MM-DD]
   ferment fill-batch <issue> [--slug SLUG] [--date YYYY-MM-DD]
+  ferment looks-like-batch <issue>
   ferment remind
   ferment archive <issue>
 """
@@ -88,23 +89,52 @@ def cmd_start(args: argparse.Namespace) -> None:
     print(output.strip())
 
 
-def cmd_fill_batch(args: argparse.Namespace) -> None:
+def cmd_looks_like_batch(args: argparse.Namespace) -> None:
     issue_number = args.issue
     raw = gh("issue", "view", str(issue_number), "--json", "body")
     body = json.loads(raw)["body"] or ""
+    identity = lib.parse_batch_identity(body)
+    if identity:
+        print(f"batch slug={identity['slug']} start={identity['start']}")
+        return
+    raise SystemExit(
+        f"issue #{issue_number} is not a batch issue: body has no "
+        "ferment:batch marker and is not a readable Start-a-batch form "
+        "(recipe slug and start date)"
+    )
+
+
+def cmd_fill_batch(args: argparse.Namespace) -> None:
+    issue_number = args.issue
+    raw = gh("issue", "view", str(issue_number), "--json", "body,labels")
+    issue = json.loads(raw)
+    body = issue["body"] or ""
+    labels = {lab.get("name") for lab in issue.get("labels") or []}
 
     try:
         lib.parse_batch_marker(body)
-        print(f"issue #{issue_number} already has a batch marker; leaving it alone")
-        return
+        already_filled = True
     except ValueError:
-        pass
+        already_filled = False
 
-    fields = lib.parse_form_body(body)
-    slug = args.slug or fields.get("Recipe slug")
-    date_str = args.date or fields.get("Start date")
+    identity = lib.parse_batch_identity(body)
+    if identity:
+        slug = args.slug or identity["slug"]
+        date_str = args.date or identity["start"]
+    else:
+        fields = lib.parse_form_body(body)
+        slug = args.slug or fields.get("Recipe slug")
+        date_str = args.date or fields.get("Start date")
     if not slug:
         raise SystemExit(f"issue #{issue_number}: no recipe slug found")
+
+    if "batch" not in labels:
+        gh("issue", "edit", str(issue_number), "--add-label", "batch")
+        print(f"added batch label to issue #{issue_number}")
+
+    if already_filled:
+        print(f"issue #{issue_number} already has a batch marker; leaving it alone")
+        return
 
     if not date_str or date_str.strip().lower() == "today":
         start_date = today_local()
@@ -258,6 +288,10 @@ def main(argv: list[str] | None = None) -> int:
     p_fill.add_argument("--slug")
     p_fill.add_argument("--date")
     p_fill.set_defaults(func=cmd_fill_batch)
+
+    p_looks = sub.add_parser("looks-like-batch")
+    p_looks.add_argument("issue")
+    p_looks.set_defaults(func=cmd_looks_like_batch)
 
     sub.add_parser("remind").set_defaults(func=cmd_remind)
 

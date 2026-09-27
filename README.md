@@ -13,9 +13,11 @@ in (`gh auth login`).
 1. Fork this repository (or copy it to your own new repo).
 2. In your fork's Settings > Actions > General, enable Actions if they're
    disabled by default for forks.
-3. Create the `batch` label once: `gh label create batch --color 6f4e37
-   --description "A fermentation batch in progress"` (the daily-reminder
-   workflow also creates it automatically on its first run if it's missing).
+3. You do not need to create the `batch` label yourself: the daily-reminder
+   workflow creates it automatically (including when the first batch issue
+   is opened) and applies it to new batches. A batch is recognized from its
+   issue body (the Start-a-batch form, or a `ferment:batch` marker) if the
+   label is missing, so the first batch on a fresh repo is not skipped.
 4. Add a recipe: transcribe a cookbook photo into `recipes/<slug>/recipe.md`
    (by hand, or ask any coding agent to do it - see AGENTS.md) and put the
    photo alongside it as `source-1.jpg`.
@@ -66,7 +68,9 @@ for tests and documentation; do not treat it as a real recipe.
 
 ## Batches
 
-A batch (one run of a recipe) is tracked as a GitHub issue labeled `batch`:
+A batch (one run of a recipe) is tracked as a GitHub issue labeled `batch`
+(the label is created and applied automatically; if it is missing, the
+issue is still recognized from its body):
 
 - Started from the "Start a batch" issue form under `.github/ISSUE_TEMPLATE/`,
   which asks for the recipe slug and a start date (defaults to today).
@@ -98,7 +102,8 @@ calls):
   the computed, dated checklist for that recipe.
 - `tools/ferment fill-batch <issue> [--slug SLUG] [--date YYYY-MM-DD]` — fill
   in the dated checklist on a batch issue created from the issue form; run
-  automatically by the daily-reminder workflow when a new `batch` issue opens.
+  automatically by the daily-reminder workflow when a new batch issue opens
+  (including ones that arrived without the `batch` label).
 - `tools/ferment remind` — comment on open batches with a step due today; run
   automatically by the daily-reminder workflow.
 - `tools/ferment archive <issue>` — write a closed issue's body and comments to
