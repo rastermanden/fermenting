@@ -123,6 +123,8 @@ def cmd_remind(args: argparse.Namespace) -> None:
         "batch",
         "--state",
         "open",
+        "--limit",
+        "1000",
         "--json",
         "number,title,body,author,comments",
     )
@@ -134,8 +136,12 @@ def cmd_remind(args: argparse.Namespace) -> None:
         except ValueError:
             continue
 
-        recipe = load_recipe(slug)
-        steps = lib.compute_schedule(recipe["schedule"], start)
+        try:
+            recipe = load_recipe(slug)
+            steps = lib.compute_schedule(recipe["schedule"], start)
+        except (SystemExit, ValueError) as exc:
+            print(f"skipping #{issue['number']} ({slug}): {exc}", file=sys.stderr)
+            continue
         due = lib.steps_due_on(steps, today)
         if not due:
             continue
@@ -163,6 +169,8 @@ def cmd_today(args: argparse.Namespace) -> None:
         "batch",
         "--state",
         "open",
+        "--limit",
+        "1000",
         "--json",
         "number,title,body,author",
     )
