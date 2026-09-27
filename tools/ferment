@@ -6,6 +6,8 @@ Standard library only, plus the `gh` CLI for GitHub calls.
 Usage:
   ferment today
   ferment start <slug> [--date YYYY-MM-DD]
+  ferment fill-batch <issue> [--slug SLUG] [--date YYYY-MM-DD]
+  ferment remind
   ferment archive <issue>
 """
 from __future__ import annotations

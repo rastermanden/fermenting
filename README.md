@@ -67,6 +67,11 @@ calls):
 - `tools/ferment today` — list everything due today across open batches.
 - `tools/ferment start <slug> [--date YYYY-MM-DD]` — open a batch issue with
   the computed, dated checklist for that recipe.
+- `tools/ferment fill-batch <issue> [--slug SLUG] [--date YYYY-MM-DD]` — fill
+  in the dated checklist on a batch issue created from the issue form; run
+  automatically by the daily-reminder workflow when a new `batch` issue opens.
+- `tools/ferment remind` — comment on open batches with a step due today; run
+  automatically by the daily-reminder workflow.
 - `tools/ferment archive <issue>` — write a closed issue's body and comments to
   `batches/<start-date>-<slug>/log.md`.
 
