@@ -3,9 +3,10 @@ name: Daily batch reminder
 # Runs once a day and on-demand to remind batch owners of steps due today, and
 # fills in the dated checklist when a new batch issue is opened via the form.
 #
-# The cron below fires at 05:30 UTC, which is 07:00 in Europe/Copenhagen
-# (06:00 during DST) - the default reminder timezone. If your batches use a
-# different timezone, set the repo variable FERMENT_TZ to any IANA zone name
+# The cron below fires at 05:30 UTC. GitHub schedules always use UTC, so in
+# the default Europe/Copenhagen zone that is 07:30 Danish summer time (CEST)
+# and 06:30 winter time (CET). If your batches use a different timezone, set
+# the repo variable FERMENT_TZ to any IANA zone name
 # (e.g. "America/New_York") - tools/ferment reads it to compute "today" for
 # schedules and comments - and adjust the cron time below to match your
 # preferred local hour.

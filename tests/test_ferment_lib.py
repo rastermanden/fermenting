@@ -16,6 +16,28 @@ FIXTURE_RECIPE = (
     / "recipe.md"
 )
 
+RECIPES_DIR = Path(__file__).resolve().parent.parent / "recipes"
+
+
+class RecipesDirectoryTests(unittest.TestCase):
+    """Every recipe under recipes/ must parse and compute a schedule.
+
+    Guards against a malformed recipe (bad frontmatter, unsupported schedule
+    entry, ...) reaching the repo and CI.
+    """
+
+    def test_all_recipes_parse_and_schedule(self):
+        recipe_files = sorted(RECIPES_DIR.glob("*/recipe.md"))
+        self.assertTrue(recipe_files, "no recipes found under recipes/")
+        start = datetime.date(2024, 1, 10)
+        for recipe_file in recipe_files:
+            with self.subTest(recipe=recipe_file.parent.name):
+                recipe = lib.parse_recipe(recipe_file.read_text())
+                self.assertTrue(recipe.get("title"), "recipe has no title")
+                self.assertIn("schedule", recipe)
+                steps = lib.compute_schedule(recipe["schedule"], start)
+                self.assertTrue(steps, "recipe schedule produced no steps")
+
 
 class ParseRecipeTests(unittest.TestCase):
     def test_parses_fixture_recipe(self):

@@ -3,7 +3,7 @@
 This repo tracks a home fermentation hobby: recipes transcribed from cookbook
 photos, and each brewing run ("batch") tracked as a GitHub issue. It's meant
 to work with any coding agent (Claude Code, Codex, Copilot, Cursor, Pi, or by
-hand) - there's nothing firstmate-specific here.
+hand).
 
 See `README.md` for the full recipe/batch file formats and human quickstart.
 
