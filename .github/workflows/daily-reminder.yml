@@ -1,0 +1,62 @@
+name: Daily batch reminder
+
+on:
+  schedule:
+    # 07:00 in Copenhagen is 05:00 or 06:00 UTC depending on DST;
+    # run at 05:30 UTC and let the script itself compute the Copenhagen date.
+    - cron: "30 5 * * *"
+  workflow_dispatch: {}
+  issues:
+    types: [opened]
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  ensure-label:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ensure the "batch" label exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create batch \
+            --repo "${{ github.repository }}" \
+            --color "6f4e37" \
+            --description "A fermentation batch in progress" \
+            --force
+
+  fill-new-batch:
+    if: github.event_name == 'issues'
+    needs: ensure-label
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Fill in the dated checklist for the new batch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh issue view "${{ github.event.issue.number }}" --json labels \
+              --jq '.labels[].name' | grep -qx batch; then
+            python3 tools/ferment fill-batch "${{ github.event.issue.number }}"
+          else
+            echo "not a batch issue, skipping"
+          fi
+
+  remind:
+    if: github.event_name != 'issues'
+    needs: ensure-label
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Comment on batches with something due today
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/ferment remind

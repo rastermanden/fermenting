@@ -1,0 +1,2 @@
+This fixture recipe has no real cookbook photo. A real recipe would have
+source-1.jpg (etc.) here alongside recipe.md.

@@ -1,0 +1,29 @@
+name: Start a batch
+description: Start tracking a new fermentation batch for a recipe already in this repo.
+title: "Batch: "
+labels:
+  - batch
+body:
+  - type: input
+    id: slug
+    attributes:
+      label: Recipe slug
+      description: >-
+        The recipe's folder name under recipes/, e.g. "sauerkraut" for
+        recipes/sauerkraut/recipe.md.
+      placeholder: recipe-slug
+    validations:
+      required: true
+  - type: input
+    id: start_date
+    attributes:
+      label: Start date
+      description: Day 0 of the schedule. Defaults to today if left as-is.
+      value: today
+    validations:
+      required: true
+  - type: markdown
+    attributes:
+      value: |
+        Submitting this form opens the batch issue. The daily reminder job
+        will fill in the dated checklist automatically.
