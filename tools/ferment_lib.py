@@ -181,6 +181,27 @@ def render_batch_body(slug: str, start_date: datetime.date, steps: list[Step]) -
 FORM_HEADING_RE = re.compile(r"^###\s+(.+?)\s*$", re.MULTILINE)
 
 
+def parse_batch_identity(text: str) -> dict[str, str] | None:
+    """Return {slug, start} if this issue body is a batch, else None.
+
+    Recognizes a filled batch (a ferment:batch marker) or a Start-a-batch
+    issue form that includes both Recipe slug and Start date. Used by the
+    daily-reminder workflow to label unlabeled first batches, and by
+    fill-batch to read the same fields.
+    """
+    try:
+        slug, start = parse_batch_marker(text)
+        return {"slug": slug, "start": start.isoformat()}
+    except ValueError:
+        pass
+    fields = parse_form_body(text)
+    slug = (fields.get("Recipe slug") or "").strip()
+    start = (fields.get("Start date") or "").strip()
+    if slug and start:
+        return {"slug": slug, "start": start}
+    return None
+
+
 def parse_form_body(text: str) -> dict[str, str]:
     """Parse a GitHub issue-form-rendered body into {heading: value}.
 
