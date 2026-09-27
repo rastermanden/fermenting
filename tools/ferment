@@ -1,0 +1,270 @@
+#!/usr/bin/env python3
+"""ferment: manage fermentation batches as GitHub issues.
+
+Standard library only, plus the `gh` CLI for GitHub calls.
+
+Usage:
+  ferment today
+  ferment start <slug> [--date YYYY-MM-DD]
+  ferment fill-batch <issue> [--slug SLUG] [--date YYYY-MM-DD]
+  ferment remind
+  ferment archive <issue>
+"""
+from __future__ import annotations
+
+import argparse
+import datetime
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import ferment_lib as lib
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+RECIPES_DIR = REPO_ROOT / "recipes"
+BATCHES_DIR = REPO_ROOT / "batches"
+
+
+def today_local() -> datetime.date:
+    """Today's date in the reminder timezone, without requiring zoneinfo data.
+
+    The timezone is read from the FERMENT_TZ environment variable (any IANA
+    zone name, e.g. "America/New_York"), defaulting to "Europe/Copenhagen" so
+    the daily reminder job's timing isn't tied to any one owner's location.
+    Falls back to system local date if the configured zone cannot be loaded
+    (e.g. a minimal container without tzdata).
+    """
+    tz_name = os.environ.get("FERMENT_TZ") or "Europe/Copenhagen"
+    try:
+        from zoneinfo import ZoneInfo
+
+        return datetime.datetime.now(ZoneInfo(tz_name)).date()
+    except Exception:
+        return datetime.date.today()
+
+
+def gh(*args: str, input_text: str | None = None) -> str:
+    result = subprocess.run(
+        ["gh", *args],
+        input=input_text,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return result.stdout
+
+
+def load_recipe(slug: str) -> dict:
+    path = RECIPES_DIR / slug / "recipe.md"
+    if not path.exists():
+        raise SystemExit(f"no such recipe: {path}")
+    return lib.parse_recipe(path.read_text())
+
+
+def cmd_start(args: argparse.Namespace) -> None:
+    slug = args.slug
+    start_date = (
+        datetime.date.fromisoformat(args.date) if args.date else today_local()
+    )
+    recipe = load_recipe(slug)
+    steps = lib.compute_schedule(recipe["schedule"], start_date)
+    body = lib.render_batch_body(slug, start_date, steps)
+    title = f"Batch: {recipe.get('title', slug)} ({start_date.isoformat()})"
+
+    output = gh(
+        "issue",
+        "create",
+        "--title",
+        title,
+        "--body",
+        body,
+        "--label",
+        "batch",
+    )
+    print(output.strip())
+
+
+def cmd_fill_batch(args: argparse.Namespace) -> None:
+    issue_number = args.issue
+    raw = gh("issue", "view", str(issue_number), "--json", "body")
+    body = json.loads(raw)["body"] or ""
+
+    try:
+        lib.parse_batch_marker(body)
+        print(f"issue #{issue_number} already has a batch marker; leaving it alone")
+        return
+    except ValueError:
+        pass
+
+    fields = lib.parse_form_body(body)
+    slug = args.slug or fields.get("Recipe slug")
+    date_str = args.date or fields.get("Start date")
+    if not slug:
+        raise SystemExit(f"issue #{issue_number}: no recipe slug found")
+
+    if not date_str or date_str.strip().lower() == "today":
+        start_date = today_local()
+    else:
+        start_date = datetime.date.fromisoformat(date_str.strip())
+
+    recipe = load_recipe(slug)
+    steps = lib.compute_schedule(recipe["schedule"], start_date)
+    marker = lib.render_batch_marker(slug, start_date)
+    checklist = lib.render_checklist(steps)
+    new_body = f"{body.rstrip()}\n\n{marker}\n\n{checklist}\n"
+
+    gh("issue", "edit", str(issue_number), "--body", new_body)
+    print(f"filled checklist for issue #{issue_number} ({slug}, start {start_date.isoformat()})")
+
+
+def cmd_remind(args: argparse.Namespace) -> None:
+    today = today_local()
+    raw = gh(
+        "issue",
+        "list",
+        "--label",
+        "batch",
+        "--state",
+        "open",
+        "--limit",
+        "1000",
+        "--json",
+        "number,title,body,author,comments",
+    )
+    issues = json.loads(raw)
+    for issue in issues:
+        body = issue["body"] or ""
+        try:
+            slug, start = lib.parse_batch_marker(body)
+        except ValueError:
+            continue
+
+        try:
+            recipe = load_recipe(slug)
+            steps = lib.compute_schedule(recipe["schedule"], start)
+        except (SystemExit, ValueError, KeyError) as exc:
+            print(f"skipping #{issue['number']} ({slug}): {exc}", file=sys.stderr)
+            continue
+        due = lib.steps_due_on(steps, today)
+        if not due:
+            continue
+
+        comment_bodies = [c.get("body", "") for c in issue.get("comments", [])]
+        if lib.has_reminder_for_date(comment_bodies, today):
+            continue
+
+        author = issue.get("author", {}).get("login")
+        mention = f"@{author} " if author else ""
+        lines = [lib.render_reminder_marker(today), "", f"{mention}today's steps:", ""]
+        lines += [f"- {step.task}" for step in due]
+        comment_body = "\n".join(lines) + "\n"
+
+        gh("issue", "comment", str(issue["number"]), "--body", comment_body)
+        print(f"commented on #{issue['number']} ({slug})")
+
+
+def cmd_today(args: argparse.Namespace) -> None:
+    today = today_local()
+    raw = gh(
+        "issue",
+        "list",
+        "--label",
+        "batch",
+        "--state",
+        "open",
+        "--limit",
+        "1000",
+        "--json",
+        "number,title,body,author",
+    )
+    issues = json.loads(raw)
+    any_due = False
+    for issue in issues:
+        body = issue["body"] or ""
+        try:
+            slug, start = lib.parse_batch_marker(body)
+        except ValueError:
+            continue
+        due_lines = [
+            line
+            for line in body.splitlines()
+            if (d := lib.parse_checklist_date(line)) is not None
+            and d == today
+            and not lib.checklist_line_checked(line)
+        ]
+        if due_lines:
+            any_due = True
+            print(f"#{issue['number']} {issue['title']} ({slug}):")
+            for line in due_lines:
+                print(f"  {line.strip()}")
+    if not any_due:
+        print("nothing due today")
+
+
+def cmd_archive(args: argparse.Namespace) -> None:
+    issue_number = args.issue
+    raw = gh(
+        "issue",
+        "view",
+        str(issue_number),
+        "--json",
+        "number,title,body,state,comments,author,closedAt",
+    )
+    issue = json.loads(raw)
+    if issue.get("state") not in ("CLOSED", "closed"):
+        raise SystemExit(f"issue #{issue_number} is not closed; refusing to archive")
+
+    body = issue["body"] or ""
+    slug, start = lib.parse_batch_marker(body)
+
+    out_dir = BATCHES_DIR / f"{start.isoformat()}-{slug}"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    log_path = out_dir / "log.md"
+
+    lines = [f"# {issue['title']}", "", body.strip(), "", "## Comments", ""]
+    for comment in issue.get("comments", []):
+        author = comment.get("author", {}).get("login", "unknown")
+        created = comment.get("createdAt", "")
+        lines.append(f"### {author} ({created})")
+        lines.append("")
+        lines.append(comment.get("body", "").strip())
+        lines.append("")
+
+    log_path.write_text("\n".join(lines) + "\n")
+    print(f"wrote {log_path}")
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="ferment")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    sub.add_parser("today").set_defaults(func=cmd_today)
+
+    p_start = sub.add_parser("start")
+    p_start.add_argument("slug")
+    p_start.add_argument("--date")
+    p_start.set_defaults(func=cmd_start)
+
+    p_archive = sub.add_parser("archive")
+    p_archive.add_argument("issue")
+    p_archive.set_defaults(func=cmd_archive)
+
+    p_fill = sub.add_parser("fill-batch")
+    p_fill.add_argument("issue")
+    p_fill.add_argument("--slug")
+    p_fill.add_argument("--date")
+    p_fill.set_defaults(func=cmd_fill_batch)
+
+    sub.add_parser("remind").set_defaults(func=cmd_remind)
+
+    args = parser.parse_args(argv)
+    args.func(args)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
