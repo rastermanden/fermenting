@@ -1,6 +1,34 @@
 # fermenting
 
-Recipes and batch tracking for a home fermentation hobby.
+Recipes and batch tracking for a home fermentation hobby. Works with any
+coding agent (Claude Code, Codex, Copilot, Cursor, Pi, ...) or entirely by
+hand - see AGENTS.md for the agent-facing summary and the sections below for
+the full formats.
+
+## Getting started (no agent required)
+
+**Requirements:** Python 3 and the [`gh` CLI](https://cli.github.com/), logged
+in (`gh auth login`).
+
+1. Fork this repository (or copy it to your own new repo).
+2. In your fork's Settings > Actions > General, enable Actions if they're
+   disabled by default for forks.
+3. Create the `batch` label once: `gh label create batch --color 6f4e37
+   --description "A fermentation batch in progress"` (the daily-reminder
+   workflow also creates it automatically on its first run if it's missing).
+4. Add a recipe: transcribe a cookbook photo into `recipes/<slug>/recipe.md`
+   (by hand, or ask any coding agent to do it - see AGENTS.md) and put the
+   photo alongside it as `source-1.jpg`.
+5. Start a batch either from your phone - open an issue with the "Start a
+   batch" form under Issues > New issue - or from a checkout with
+   `tools/ferment start <slug>`.
+6. Log progress as comments on the batch issue (photos can be attached from
+   the phone); close the issue when the batch is done.
+7. Optionally archive the finished batch's log into the repo with
+   `tools/ferment archive <issue>`.
+
+The daily reminder job's timing is configurable, not tied to one person or
+timezone - see [Timezone](#timezone) below.
 
 ## Recipe format
 
@@ -51,8 +79,9 @@ A batch (one run of a recipe) is tracked as a GitHub issue labeled `batch`:
 A small daily job (`.github/workflows/daily-reminder.yml`) comments each
 morning on every open `batch` issue that has a step due that day, mentioning
 the issue's author so it becomes a GitHub notification on the phone. It never
-posts more than once per calendar day (Europe/Copenhagen time) for the same
-issue, and posts nothing on days with no due step.
+posts more than once per calendar day for the same issue, and posts nothing on
+days with no due step. See [Timezone](#timezone) for how "morning" and
+"today" are determined.
 
 When a batch is finished (issue closed) and archived with
 `tools/ferment archive <issue>`, the issue body and all comments are saved to
@@ -80,3 +109,18 @@ Run its tests with:
 ```sh
 python3 -m unittest discover -s tests
 ```
+
+## Timezone
+
+Nothing here is locked to one owner, language, or timezone. `tools/ferment`
+computes "today" from the `FERMENT_TZ` environment variable - any IANA zone
+name, e.g. `America/New_York` - defaulting to `Europe/Copenhagen` if unset.
+
+To change it for the daily-reminder workflow, set a repository variable named
+`FERMENT_TZ` (Settings > Secrets and variables > Actions > Variables). The
+workflow itself runs on a fixed UTC cron (`.github/workflows/daily-reminder.yml`,
+currently 05:30 UTC, chosen to land around 07:00 in the default
+Europe/Copenhagen zone); if you use a different `FERMENT_TZ`, edit that cron
+line to match your preferred local run time - the environment variable only
+changes what counts as "today" for schedule and reminder purposes, not when
+the workflow itself runs.

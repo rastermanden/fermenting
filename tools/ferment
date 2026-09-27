@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import datetime
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -28,16 +29,20 @@ RECIPES_DIR = REPO_ROOT / "recipes"
 BATCHES_DIR = REPO_ROOT / "batches"
 
 
-def today_copenhagen() -> datetime.date:
-    """Today's date in Europe/Copenhagen, without requiring zoneinfo data.
+def today_local() -> datetime.date:
+    """Today's date in the reminder timezone, without requiring zoneinfo data.
 
-    Falls back to system local date if a Europe/Copenhagen zone cannot be
-    loaded (e.g. minimal containers without tzdata).
+    The timezone is read from the FERMENT_TZ environment variable (any IANA
+    zone name, e.g. "America/New_York"), defaulting to "Europe/Copenhagen" so
+    the daily reminder job's timing isn't tied to any one owner's location.
+    Falls back to system local date if the configured zone cannot be loaded
+    (e.g. a minimal container without tzdata).
     """
+    tz_name = os.environ.get("FERMENT_TZ", "Europe/Copenhagen")
     try:
         from zoneinfo import ZoneInfo
 
-        return datetime.datetime.now(ZoneInfo("Europe/Copenhagen")).date()
+        return datetime.datetime.now(ZoneInfo(tz_name)).date()
     except Exception:
         return datetime.date.today()
 
@@ -63,7 +68,7 @@ def load_recipe(slug: str) -> dict:
 def cmd_start(args: argparse.Namespace) -> None:
     slug = args.slug
     start_date = (
-        datetime.date.fromisoformat(args.date) if args.date else today_copenhagen()
+        datetime.date.fromisoformat(args.date) if args.date else today_local()
     )
     recipe = load_recipe(slug)
     steps = lib.compute_schedule(recipe["schedule"], start_date)
@@ -102,7 +107,7 @@ def cmd_fill_batch(args: argparse.Namespace) -> None:
         raise SystemExit(f"issue #{issue_number}: no recipe slug found")
 
     if not date_str or date_str.strip().lower() == "today":
-        start_date = today_copenhagen()
+        start_date = today_local()
     else:
         start_date = datetime.date.fromisoformat(date_str.strip())
 
@@ -117,7 +122,7 @@ def cmd_fill_batch(args: argparse.Namespace) -> None:
 
 
 def cmd_remind(args: argparse.Namespace) -> None:
-    today = today_copenhagen()
+    today = today_local()
     raw = gh(
         "issue",
         "list",
@@ -163,7 +168,7 @@ def cmd_remind(args: argparse.Namespace) -> None:
 
 
 def cmd_today(args: argparse.Namespace) -> None:
-    today = today_copenhagen()
+    today = today_local()
     raw = gh(
         "issue",
         "list",
