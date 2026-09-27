@@ -118,9 +118,9 @@ name, e.g. `America/New_York` - defaulting to `Europe/Copenhagen` if unset.
 
 To change it for the daily-reminder workflow, set a repository variable named
 `FERMENT_TZ` (Settings > Secrets and variables > Actions > Variables). The
-workflow itself runs on a fixed UTC cron (`.github/workflows/daily-reminder.yml`,
-currently 05:30 UTC, chosen to land around 07:00 in the default
-Europe/Copenhagen zone); if you use a different `FERMENT_TZ`, edit that cron
-line to match your preferred local run time - the environment variable only
-changes what counts as "today" for schedule and reminder purposes, not when
-the workflow itself runs.
+workflow itself runs on a fixed UTC cron - see the comment above the cron
+line in `.github/workflows/daily-reminder.yml` for what that currently
+resolves to in the default Europe/Copenhagen zone; if you use a different
+`FERMENT_TZ`, edit that cron line to match your preferred local run time -
+the environment variable only changes what counts as "today" for schedule
+and reminder purposes, not when the workflow itself runs.
